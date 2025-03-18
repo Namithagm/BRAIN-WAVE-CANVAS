@@ -1,0 +1,120 @@
+import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+import pygame
+import sys
+def get_data_from_user():
+    try:
+        print("Enter the number of samples:")
+        num_samples=int(input())
+        print("Enter the number of channels:")
+        num_channels=int(input())
+        print("Enter the number of time points:")
+        num_time_points=int(input())
+        data = []
+        for i in range(num_samples):
+            print(f"Enter data for sample{i+1}(each channel separated by spaces):")
+            sample=[]
+            for j in range(num_channels):
+                print(f"channel{j+1}:",end="")
+                channel_data=list(map(float,input().split()))
+                if len(channel_data)!=num_time_points:
+                    raise ValueError("Each channel must have the exact number of time points.")
+                sample.append(channel_data)
+            data.append(sample)
+        data = np.array(data)
+        print("Enter the labels for each sample(space-separated integers):")
+        labels=np.array(list(map(int,input().split())))
+        if len(labels)!=num_samples:
+            raise ValueError("Number of labels must match the number of samples.")
+        return data,labels
+    except Exception as e:
+        print(f"Error:{e}")
+        return
+def preprocess_data(data):
+    try:
+        b,a=signal.butter(2,[0.05,0.15],btype='band')
+        filtered_data=signal.filtfilt(b,a,data,axis=2)
+        data_dc_removed=filtered_data-np.mean(filtered_data,axis=2,keepdims=True)
+        normalized_data=data_dc_removed/(np.max(np.abs(data_dc_removed),axis=2,keepdims=True)+1e-8)
+        return normalized_data
+    except Exception as e:
+        print(f"preprocessing error:{e}")
+        return
+def split_data(data,labels):
+    return train_test_split(data,labels,test_size=0.2,random_state=42)
+def train_model(X_train,y_train):
+    model=RandomForestClassifier(n_estimators=100,random_state=42)
+    model.fit(X_train.reshape(X_train.shape[0],-1),y_train)
+    return model
+def test_model(model,X_test,y_test):
+    accuracy=model.score(X_test.reshape(X_test.shape[0],-1),y_test)
+    return accuracy
+def get_concentration_level(accuracy):
+    if accuracy>=0.9:
+        return "HIGH_CONCENTRATION"
+    elif accuracy>=0.8:
+        return "MEDIUM_HIGH_CONCENTRATION"
+    elif accuracy>=0.7:
+        return "MEDIUM_CONCENTRATION"
+    elif accuracy>=0.6:
+        return "LOW_MEDIUM_CONCENTRATION"
+    else:
+        return "LOW_CONCENTRATION"
+def visualize_data(data):
+    try:
+        plt.plot(data[0,0,:])
+        plt.title("Sample Data Visualiztion")
+        plt.xlabel("Time")
+        plt.ylabel("Amplitude")
+        plt.show()
+    except Exception as e:
+        print(f"Visualization Error:{e}")
+        return
+def pygame_visualize(data):
+    pygame.init()
+    screen=pygame.display.set_mode((800,600))
+    clock=pygame.time.Clock()
+    while True:
+        for event in pygame.event.get():
+            if event.type==pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+        screen.fill((255,255,255))
+        for i in range(min(len(data[0,0,:]),800)):
+            value=int(data[0,0,i]*300+300)
+            pygame.draw.line(screen,(0,0,255),(i,300),(i,value),2)
+        pygame.display.flip()
+        clock.tick(60)
+def main():
+    print("Input your data manually as prompted")
+    data,labels=get_data_from_user()
+    if data is None or labels is None:
+        print("Error:Failed to get data or labeks.")
+        return
+    print("Preprocessing data....")
+    data=preprocess_data(data)
+    if data is None:
+        print("Error: Preprocessing failed.")
+        return
+    print("Splitting data....")
+    try:
+        X_train,X_test,y_train,y_test=split_data(data,labels)
+    except Exception as e:
+        print(f"Error during train-test split:{e}")
+        return
+    print("Training model....")
+    model=train_model(X_train,y_train)
+    print("Testing model")
+    accuracy=test_model(model,X_test,y_test)
+    print(f"Modal Accuracy:{accuracy}")
+    concentration_level=get_concentration_level(accuracy)
+    print(f"Concentration Level:{concentration_level}")
+    print("Visualizing sample data....")
+    visualize_data(data)
+    print("Starting pygame visualization....")
+    pygame_visualize(data)
+if __name__=="__main__":
+    main()
