@@ -1,0 +1,92 @@
+import numpy as np
+import scipy.signal as signal
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from sklearn.model_selection import train_test_split 
+from sklearn.ensemble import RandomForestClassifier
+import pygame
+import sys
+sampling_rate=1000
+duration = 5
+time=np.linspace(0,duration,int(sampling_rate*duration))
+frequencies={
+    'Alpha':10,
+    'Beta':20,
+    'Theta':6,
+    'Delta':2
+}
+def generate_wave(frequency,time):
+    return np.sin(2*np.pi*frequency*time)
+def load_dataset():
+    data=np.random.rand(100,22,1000)
+    labels=np.random.randint(0,4,100)
+    return data,labels
+def preprocess_data(data):
+    b,a=signal.butter(4,[0.05,0.15],btype='band')
+    filtered_data=signal.filtfilt(b,a,data,axis=2)
+    data_dc_removed=filtered_data-np.mean(filtered_data,axis=2,keepdims=True)
+    normalized_data=data_dc_removed/(np.max(np.abs(data_dc_removed),axis=2,keepdims=True)+1e-8)
+    return normalized_data
+def split_data(data,labels):
+    X_train,X_test,y_train,y_test=train_test_split(data,labels,test_size=0.2,random_state=42)
+    return X_train,X_test,y_train,y_test
+def train_model(X_train,y_train):
+    model=RandomForestClassifier(n_estimators=100,random_state=42)
+    model.fit(X_train.reshape(X_train.shape[0],-1),y_train)
+    return model
+def test_model(model,X_test,y_test):
+    accuracy=model.score(X_test.reshape(X_test.shape[0],-1),y_test)
+    return accuracy
+def get_concentration_level(accuracy):
+    if accuracy>=0.9:
+        return"HIGH CONCENTRATION"
+    elif accuracy>=0.8:
+        return"MEDIUM-HIGH CONCENTRATION"
+    elif accuracy>=0.7:
+        return"MEDIUM CONCENTRATION"
+    elif accuracy>=0.6:
+        return"LOW-MEDIUM CONCENTRATION"
+    else:
+        return"LOW CONCENTRATION"
+def visualize_data(data):
+    plt.plot(data[0,0,:])
+    plt.title("Sample Data Visualization")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitude")
+    plt.show()
+def pygame_visualize(data):
+    pygame.init()
+    screen=pygame.display.set_mode((800,600))
+    clock=pygame.time.Clock()
+    screen.fill((255,255,255))
+    running=True
+    index=0
+    max_index=data.shape[2]
+    while running:
+        for event in pygame.event.get():
+            if event.type==pygame.QUIT:
+                pygame.quit()
+                return
+            screen.fill((255,255,255))
+            current_data=data[0,0,:index]
+            if index > 1:
+                pygame.draw.lines(screen,(255,0,0),False,list(enumerate(current_data)),2)
+                pygame.display.update()
+                clock.tick(60)
+                index+=1
+                if index >= max_index:
+                    index=0
+def main():
+    data,labels=load_dataset()
+    data=preprocess_data(data)
+    X_train,X_test,y_train,y_test=split_data(data,labels)
+    model=train_model(X_train,y_train)
+    accuracy=test_model(model,X_test,y_test)
+    concentration_level=get_concentration_level(accuracy)
+    print(f'Accuracy:{accuracy:.2f}%')
+    print(f'Concentration Level:{concentration_level}')
+    visualize_data(data)
+    pygame_visualize(data)
+if __name__ == '__main__':
+    main()
